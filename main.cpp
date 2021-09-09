@@ -44,7 +44,7 @@ int main() {
     //TODO Document Requirements: Maven, Gradle, Git, Bsdiff, Java 16
 
     //TODO build paperclip and buildtools in parallel if possible
-    std::cout << "Hello, World!" << std::endl;
+    std::cout << "Starting to build a " << "1.17.1" << " SpigotClip build!" << std::endl;
     std::string baseDir = current_path().string();
     buildPaperclip(baseDir);
     current_path(baseDir);
