@@ -3,4 +3,4 @@ project(spigotclipbuilder)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(spigotclipbuilder main.cpp)
+add_executable(spigotclipbuilder src/main.cpp)
