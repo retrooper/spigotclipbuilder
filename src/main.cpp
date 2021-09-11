@@ -6,6 +6,89 @@
 
 using namespace std::filesystem;
 using namespace nlohmann;
+
+//Credit to github.com/lucyy-mc for this script, we will credit her properly soon (contacting her)
+const std::string generateJarScript =
+        "#!/bin/bash\n"
+        "\n"
+        "# Generates a patched jar for paperclip\n"
+        "\n"
+        "if [[ $# < 4 ]]; then\n"
+        "    echo \"Usage ./generateJar.sh {input jar} {mojang_jar} {source_url} {name}\"\n"
+        "    exit 1;\n"
+        "fi;\n"
+        "\n"
+        "workdir=work/Paperclip\n"
+        "\n"
+        "mkdir -p $workdir\n"
+        "PAPERCLIP_JAR=paperclip.jar\n"
+        "\n"
+        "if [ ! -f $workdir/$PAPERCLIP_JAR ]; then\n"
+        "    if [ ! -d Paperclip ]; then\n"
+        "        echo \"Paperclip not found\"\n"
+        "        exit 1;\n"
+        "    fi\n"
+        "    pushd Paperclip\n"
+        "    mvn -P '!generate' clean install\n"
+        "    if [ ! -f target/paperclip*.jar ]; then\n"
+        "        echo \"Couldn't generate paperclip jar\"\n"
+        "        exit;\n"
+        "    fi;\n"
+        "    popd\n"
+        "    cp Paperclip/target/paperclip*.jar $workdir/$PAPERCLIP_JAR\n"
+        "fi;\n"
+        "\n"
+        "\n"
+        "INPUT_JAR=$1\n"
+        "VANILLA_JAR=$2\n"
+        "VANILLA_URL=$3\n"
+        "NAME=$4\n"
+        "\n"
+        "which bsdiff 2>&1 >/dev/null\n"
+        "if [ $? != 0 ]; then\n"
+        "    echo \"Bsdiff not found\"\n"
+        "    exit 1;\n"
+        "fi;\n"
+        "\n"
+        "OUTPUT_JAR=$NAME.jar\n"
+        "PATCH_FILE=$NAME.patch\n"
+        "\n"
+        "hash() {\n"
+        "    echo $(sha256sum $1 | sed -E \"s/(\\S+).*/\\1/\")\n"
+        "}\n"
+        "\n"
+        "echo \"Computing Patch\"\n"
+        "\n"
+        "bsdiff $VANILLA_JAR $INPUT_JAR $workdir/$PATCH_FILE\n"
+        "\n"
+        "genJson() {\n"
+        "    PATCH=$1\n"
+        "    SOURCE_URL=$2\n"
+        "    ORIGINAL_HASH=$3\n"
+        "    PATCHED_HASH=$4\n"
+        "    echo \"{\"\n"
+        "    echo \"    \\\"patch\\\": \\\"$PATCH\\\",\"\n"
+        "    echo \"    \\\"sourceUrl\\\": \\\"$SOURCE_URL\\\",\"\n"
+        "    echo \"    \\\"originalHash\\\": \\\"$ORIGINAL_HASH\\\",\"\n"
+        "    echo \"    \\\"patchedHash\\\": \\\"$PATCHED_HASH\\\"\"\n"
+        "    echo \"}\"\n"
+        "}\n"
+        "\n"
+        "\n"
+        "echo \"Generating Final Jar\"\n"
+        "\n"
+        "cp $workdir/$PAPERCLIP_JAR $workdir/$OUTPUT_JAR\n"
+        "\n"
+        "PATCH_JSON=patch.json\n"
+        "\n"
+        "genJson $PATCH_FILE $VANILLA_URL $(hash $VANILLA_JAR) $(hash $INPUT_JAR) > $workdir/$PATCH_JSON\n"
+        "\n"
+        "pushd $workdir\n"
+        "\n"
+        "jar uf $OUTPUT_JAR $PATCH_FILE $PATCH_JSON\n"
+        "\n"
+        "popd";
+
 void execute_command(const std::string &command) {
     std::system(command.c_str());
 }
@@ -44,9 +127,10 @@ void buildBuildTools(std::string javaBinary, std::string &baseDir, const std::st
                 buildDataInfoContent->assign(std::istreambuf_iterator<char>(ifStream),
                                              std::istreambuf_iterator<char>());
                 std::cout << "Finished building Spigot with BuildTools..." << std::endl;
-            }
-            else {
-                std::cerr << "Did not successfully build Spigot with BuildTools, are you sure you have all required components installed?" << std::endl;
+            } else {
+                std::cerr
+                        << "Did not successfully build Spigot with BuildTools, are you sure you have all required components installed?"
+                        << std::endl;
                 std::exit(-1);
             }
         } else {
@@ -59,6 +143,7 @@ void buildBuildTools(std::string javaBinary, std::string &baseDir, const std::st
 }
 
 void buildPaperclip(std::string &baseDir) {
+    create_directory("work/Paperclip");
     std::string paperClipBuildDir = baseDir + "/Paperclip-Build";
     std::string executableDir = paperClipBuildDir + "/build/libs";
     bool shouldBuild = !exists(executableDir);
@@ -73,16 +158,23 @@ void buildPaperclip(std::string &baseDir) {
             //Copy the first file in the directory (there should only be one)
             for (const auto &entry: directory_iterator(executableDir)) {
                 //Copy paperclip jar
-                execute_command("cp " + entry.path().string() + " ../../..");
+                execute_command("mv " + entry.path().string() + " paperclip.jar");
+                execute_command("cp paperclip.jar ../../..");
                 break;
             }
-            std::cout << "Finished building paperclip!" << std::endl;
+            std::cout << "Finished building PaperClip!" << std::endl;
         } else {
             std::cerr << "Failed to build PaperClip. Are you sure you have all required components installed?"
                       << std::endl;
             std::exit(-1);
         }
     }
+}
+
+void patch(const std::string &spigotFileName, const std::string &vanillaFileName, const std::string &vanillaServerURL,
+           const std::string &outputFileName) {
+    execute_command("bash generateJar.sh " + spigotFileName + " " + vanillaFileName + " " + vanillaServerURL + " " +
+                    outputFileName);
 }
 
 void build(const std::string &version, const std::string &javaBinary) {
@@ -94,19 +186,33 @@ void build(const std::string &version, const std::string &javaBinary) {
     std::string buildDataInfoContent;
     buildBuildTools(javaBinary, baseDir, version, &buildDataInfoContent);
     current_path(baseDir);
-
     //Actually start patching, we should have everything required to start patching
     json buildDataJson = json::parse(buildDataInfoContent);
     std::string vanillaServerURL = buildDataJson.value("serverUrl", "invalid");
 
+    //Generate patch script
+    std::ofstream generateJarFile("generateJar.sh");
+    generateJarFile << generateJarScript;
+    generateJarFile.close();
+
+    //Patch with script
+    std::string spigotFileName = "spigot-" + version + ".jar";
+    std::string vanillaFileName = "minecraft_server." + version + ".jar";
+    std::string outputFileName = "spigotclip-" + version + ".jar";
+
+    execute_command("cp paperclip.jar work/Paperclip");
+    patch(spigotFileName, vanillaFileName, vanillaServerURL, outputFileName);
+    create_directory("output");
+    current_path("work/Paperclip");
+    execute_command("cp " + outputFileName + " ../../output");
+    std::cout << "Finished patching " << outputFileName << std::endl;
+    std::cout << "Enjoy :D" << std::endl;
 }
 
 int main() {
     //TODO Document Requirements: Maven, Gradle, Git, bsdiff, Java 16
 
     //TODO build paperclip and buildtools in parallel if possible
-
-    //TODO Parse vanilla server url found in BuildTools-Build/BuildData/info.json
     build("1.17.1", "/usr/lib/jvm/java-16-openjdk/bin/java");
     return 0;
 }
