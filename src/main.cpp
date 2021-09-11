@@ -143,7 +143,10 @@ void buildBuildTools(std::string javaBinary, std::string &baseDir, const std::st
 }
 
 void buildPaperclip(std::string &baseDir) {
-    create_directory("work/Paperclip");
+    create_directory("work");
+    current_path("work");
+    create_directory("Paperclip");
+    current_path(baseDir);
     std::string paperClipBuildDir = baseDir + "/Paperclip-Build";
     std::string executableDir = paperClipBuildDir + "/build/libs";
     bool shouldBuild = !exists(executableDir);
