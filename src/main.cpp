@@ -201,7 +201,7 @@ void build(const std::string &version, const std::string &javaBinary) {
     std::string outputFileName = "spigotclip-" + version + ".jar";
 
     execute_command("cp paperclip.jar work/Paperclip");
-    patch(spigotFileName, vanillaFileName, vanillaServerURL, outputFileName);
+    patch(spigotFileName, vanillaFileName, vanillaServerURL, "spigotclip-" + version);
     create_directory("output");
     current_path("work/Paperclip");
     execute_command("cp " + outputFileName + " ../../output");
